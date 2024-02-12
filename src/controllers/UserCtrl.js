@@ -9,16 +9,21 @@ const registerUser = async (req, res) => {
         const data = req.body;
 
         // Loi dinh dang email
-        // const reg = /^\w+([-+.']\w+)*@\w+([-.]\w+)*\.\w+([-.]\w+)*$/;
-        // const isCheckEmail = reg.test(data.email);
+        const reg = /^\w+([-+.']\w+)*@\w+([-.]\w+)*\.\w+([-.]\w+)*$/;
+        const isCheckEmail = reg.test(data.email);
 
         // const phoneNumberRegex = /^(?:\+84|0)(?:\d){9}$/;
         const passwordRegex = /^(?=.*\d)(?=.*[!@#$%^&*])(?=.*[a-z])(?=.*[A-Z])[A-Z][a-zA-Z0-9!@#$%^&*]{7,16}$/;
 
-        if (!data.username || !data.password) {
+        if (!data.username || !data.password || !data.email) {
             return res.status(200).json({
                 status: 'ERR',
                 message: 'Trường không được để trống',
+            });
+        } else if (!isCheckEmail) {
+            return res.json({
+                status: 'ERR',
+                message: 'Email không hợp lệ!',
             });
         } else if (!passwordRegex.test(data.password)) {
             return res.json({
@@ -26,18 +31,16 @@ const registerUser = async (req, res) => {
                 message: 'Mật khẩu yếu!',
             });
         }
-        // else if (!phoneNumberRegex.test(data.phone)) {
-        //     return res.json({
-        //         msg: 'Số điện thoại không hợp lệ',
-        //     });
-        // }
 
         const checkUser = await User.findOne({
             username: data.username,
-            // phone: data.phone,
         });
 
-        if (checkUser !== null) {
+        const checkEmail = await User.findOne({
+            email: data.email,
+        });
+
+        if (checkUser !== null || checkEmail !== null) {
             return res.status(200).json({
                 status: 'ERR',
                 message: 'Thông tin tài khoản đã tồn tại',
@@ -49,10 +52,13 @@ const registerUser = async (req, res) => {
         const createdUser = await User.create({
             username: data.username,
             password: hashed,
-            // phone: data.phone,
+            email: data.email,
         });
         if (createdUser) {
-            return res.status(200).json(createdUser);
+            return res.status(200).json({
+                status: 'SUCCESS',
+                createdUser
+            });
         }
     } catch (error) {
         res.status(500).json(error);
@@ -109,7 +115,7 @@ const loginUser = async (req, res) => {
             //     path: '/',
             //     sameSite: 'strict',
             // });
-            const { password, ...others } = user._doc;
+            const { password, isAdmin, ...others } = user._doc;
 
             return res.json({
                 msg: 'SUCCESS',
@@ -124,7 +130,7 @@ const loginUser = async (req, res) => {
 
 const getAllUser = async (req, res) => {
     try {
-        const allUser = await User.find({ isAdmin : false});
+        const allUser = await User.find({ isAdmin: false });
         return res.status(200).json(allUser);
     } catch (error) {
         res.status(500).json(error);
@@ -162,4 +168,60 @@ const editRoleStatus = async (req, res) => {
     }
 };
 
-module.exports = { registerUser, getUser, loginUser, getAllUser, editRoleStatus };
+const changePassword = async (req, res) => {
+    try {
+        const { userId, oldPw, newPw } = req.body;
+
+        if (!userId || !oldPw || !newPw) {
+            return res.json({
+                status: 'ERR',
+                msg: 'Trường dữ liệu không được để trống!',
+            });
+        }
+
+        const user = await User.findOne({ _id: userId });
+        if (!user) {
+            return res.json({
+                status: 'ERR',
+                msg: 'Tài khoản không hợp lệ!',
+            });
+        }
+        const validPassword = await bcrypt.compare(oldPw, user.password);
+
+        if (!validPassword) {
+            return res.json({
+                status: 'ERR',
+                msg: 'Mật khẩu không chính xác!',
+            });
+        }
+
+        const passwordRegex = /^(?=.*\d)(?=.*[!@#$%^&*])(?=.*[a-z])(?=.*[A-Z])[A-Z][a-zA-Z0-9!@#$%^&*]{7,16}$/;
+
+        if (!passwordRegex.test(newPw)) {
+            return res.json({
+                status: 'ERR',
+                msg: 'Mật khẩu yếu!',
+            });
+        }
+        // console.log(req.body, validPassword);
+
+        if (user && validPassword) {
+            console.log(newPw);
+            //Generate access token
+            const hashed = bcrypt.hashSync(newPw, 10);
+            const pwUpdated = await User.updateOne({ _id: req.body.userId }, { password: hashed });
+
+            return res.json({
+                msg: 'SUCCESS',
+            });
+        }
+    } catch (error) {
+        return res.json({
+            status: 'ERR',
+            msg: 'Thay đổi không hợp lệ',
+            error,
+        });
+    }
+};
+
+module.exports = { registerUser, getUser, loginUser, getAllUser, editRoleStatus, changePassword };

@@ -82,6 +82,18 @@ const getAllProduct = async (req, res) => {
     }
 };
 
+const getSortProduct = async (req, res) => {
+    try {
+        const sort = req.query.sort;
+        const products = await Product.find()
+            .sort({ price: sort == 1 ? 1 : -1 })
+            .exec();
+        return res.status(200).json(products);
+    } catch (error) {
+        return res.status(500).json(error);
+    }
+};
+
 const getProductByName = async (req, res) => {
     try {
         const name = req.query.name;
@@ -103,7 +115,7 @@ const addProduct = async (req, res) => {
         const { name, slug, category, description, price, colors } = req.body;
         const fileData = req.file;
 
-        if (!name || !slug || !category || !description || !price) {
+        if (!name || !slug || !category || !description || !price || !fileData) {
             if (fileData) await unlink(`${fileData?.path}`);
             return res.json({
                 msg: 'Không được để trống!',
@@ -146,7 +158,7 @@ const editProduct = async (req, res) => {
     try {
         const id = req.params.id;
         const { name, slug, category, description, price, colors } = req.body;
-        const fileData = req.file;
+        const fileData = req?.file;
 
         const check = await Product.findOne({ _id: id });
         if (!check) {
@@ -179,9 +191,30 @@ const editProduct = async (req, res) => {
             product,
         });
     } catch (error) {
-        if (req.file) {
+        if (req?.file) {
             await unlink(`${req.file.path}`);
         }
+        return res.status(500).json(error);
+    }
+};
+
+const onlyEditQty = async (req, res) => {
+    try {
+        const { proId, qty, colorId } = req.body;
+
+        const productUpdated = await Product.findOneAndUpdate(
+            { _id: proId, 'colors._id': colorId },
+            { $set: { 'colors.$.inStock': qty } },
+            { new: true },
+        ).exec();
+
+        if (productUpdated) {
+            return res.json({
+                status: 'SUCCESS',
+                productUpdated,
+            });
+        }
+    } catch (error) {
         return res.status(500).json(error);
     }
 };
@@ -222,9 +255,11 @@ module.exports = {
     editCategory,
     deleteCategory,
     getAllProduct,
+    getSortProduct,
     getProductByName,
     addProduct,
     editProduct,
+    onlyEditQty,
     deleteProduct,
     getImageProd,
 };

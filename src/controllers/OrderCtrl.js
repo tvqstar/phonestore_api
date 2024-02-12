@@ -14,7 +14,7 @@ const getOrderById = async (req, res) => {
 
 const getOrder = async (req, res) => {
     try {
-        const order = await Order.find({});
+        const order = await Order.find({}).populate({ path: 'user', select: 'username' }).exec();;
         return res.json(order);
     } catch (error) {
         return res.json('Có lỗi');
